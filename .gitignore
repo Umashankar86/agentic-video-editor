@@ -1,52 +1,37 @@
-# Node.js
-node_modules/
-npm-debug.log
-yarn-error.log
-dist/
-build/
-.next/
-out/
-
-# Go
-*.o
-*.a
-*.so
-__debug_bin
-*.test
-.DS_Store
-vendor/
-
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-env/
-venv/
-ENV/
-.venv
-
-# Environment variables
 .env
 .env.local
 .env.*.local
+.venv/
+env/
+venv/
+__pycache__/
+.pytest_cache/
+*.py[cod]
+*$py.class
 
-# IDEs
-.vscode/
+# Go build output.
+*.o
+*.a
+*.so
+*.test
+__debug_bin
+vendor/
+
+# Runtime media is intentionally kept out of source control.
+uploads/*
+!uploads/.gitkeep
+work/*
+!work/.gitkeep
+!work/go.mod
+outputs/*
+!outputs/.gitkeep
+
+# Local binaries and editor files.
+bin/
 .idea/
+.vscode/
 *.swp
 *.swo
 *~
 .DS_Store
-
-# Docker
-.docker-*
-
-# Database
-*.db
-*.sqlite
-
-# Storage
-uploads/
-tmp/
+*.log
