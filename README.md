@@ -6,48 +6,32 @@ This is genuinely AI-planned: there is no rules parser in the orchestration deci
 
 ## Architecture
 
-```text
-Client
-  │ uploads + prompt: "make the best edit of this"
-  ▼
-Go Orchestrator :8080
-  ├── REST validation and upload/output serving
-  ├── buffered chan string job queue
-  ├── configurable goroutine worker pool
-  └── mutex-protected job status store
-             │ REST /v1/agent/run
-             ▼
-Python FastAPI Agent Worker :8000
-  │
-  ▼ LangGraph
-Video Understanding Agent
-  ├── OpenCV samples one frame every 30 seconds
-  ├── BLIP captions every sampled frame
-  └── ffprobe extracts duration/audio/geometry
-             │
-             ▼
-Nemotron Supervisor Agent
-  ├── reads user intent + scene timeline
-  ├── creates structured task/dependency graph
-  └── dynamically chooses specialist agents/tools
-             │
-     ┌───────┼──────────┬────────────┬──────────┐
-     ▼       ▼          ▼            ▼          ▼
- Editing   Music     Subtitle     Animation    Export
- Agent     Agent       Agent         Agent       Agent
-     └───────┴──────────┴────────────┴──────────┘
-             │ generated editor.* Python statements
-             ▼
-Restricted Code Sandbox
-  ├── strict AST allow-list; no imports/files/shell/network APIs
-  ├── isolated subprocess + timeout/resource limits
-  └── capability object with FFmpeg/OpenCV/Whisper tools
-             │
-             ▼
-BLIP + Nemotron Review Agent → outputs/final.mp4 + thumbnail
+```mermaid
+flowchart TD
+    API[Go API and job queue] --> Vision[Video understanding]
+    Vision --> Supervisor[Supervisor task plan]
+    Supervisor --> Scheduler[Dependency scheduler]
+    Scheduler -->|Ready tasks via Send| Agents[Specialist agents]
+    Agents -->|Accumulate code results| Scheduler
+    Scheduler -->|All tasks completed| Sandbox[Sandbox render and export]
+    Sandbox --> Review[Output review]
 ```
 
-The specialist fan-out is dynamic. Nemotron may use only editing and export for a precise trim, or add music, automatic subtitles, animations, grading, transitions, and reframing for an open-ended creative request.
+The specialist fan-out is dependency-driven. The supervisor selects tasks and declares `depends_on` IDs. A scheduler sends only ready tasks through LangGraph `Send`, so independent specialist calls run concurrently. At each wave boundary their outputs are accumulated in shared state; dependent agents receive their direct predecessors' generated code and rationale before starting. Export depends on every other task. Once all tasks finish, their code is combined in plan order and passed to the sandbox exactly once.
+
+For example, independent editing and music decisions can run together. An animation agent that needs the editing agent's final timing waits for editing and receives its code. Export waits for editing, music, and animation. A fully chained plan runs sequentially; a plan with independent tasks runs those tasks concurrently. LangGraph schedules in waves, so a new wave waits for every agent in the current wave.
+
+Concurrency applies to specialist **code generation**, not FFmpeg mutations of the same video. Media operations run sequentially in the sandbox, followed by output review. Dependency outputs describe planned operations; they are not rendered intermediate videos. The supervisor must declare timing dependencies when cuts or speed changes affect subsequent captions or animation.
+
+Plans reject duplicate IDs, missing/forward/self dependencies (and therefore cycles), and missing/multiple/non-final export tasks. Task list order is the deterministic rendering order, and dependencies must reference earlier tasks. Agent failures stop the graph before rendering. The response exposes each task's `depends_on` in operation parameters.
+
+Run orchestration tests without model/API access:
+
+```bash
+python -m pytest worker/tests/test_graph.py -q
+```
+
+Tests cover actual overlap using a thread barrier, dependent context, final joining, long sequential plans, invalid graphs, and failed agents.
 
 ## Agent and tool inventory
 
@@ -243,4 +227,5 @@ The unit suite covers Go asynchronous execution, media helpers, and sandbox esca
 | `WORKER_URL` | `http://localhost:8000` | Python service URL |
 | `MEDIA_ROOT` | `.` | shared parent of media directories |
 | `MAX_UPLOAD_MB` | `1024` | upload cap |
+
 
