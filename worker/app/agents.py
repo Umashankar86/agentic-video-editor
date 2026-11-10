@@ -134,7 +134,13 @@ class OpenRouterAgents:
 You are the supervisor of an autonomous video-editing system. Create a concrete task graph.
 Do not assume a fixed sequence: choose only the specialist agents and tools that improve this video.
 Respect the user's explicit intent. Use scene captions and timestamps to infer pacing, cuts, mood,
-music style, subtitle need, and tasteful animation. Tasks execute in listed order. Always finish with
+music style, subtitle need, and tasteful animation. Specialists GENERATE CODE in dependency waves:
+independent tasks (depends_on=[]) run concurrently; dependent tasks wait and receive predecessor code.
+Declare dependencies whenever a task needs another agent's decisions, timing, or generated code.
+For example, titles/subtitles depending on a trimmed timeline must depend on the editing task.
+Do not add dependencies between genuinely independent decisions just to serialize them.
+Generated editor calls are later executed in listed order on one shared video timeline.
+Always finish with
 exactly one export task. Task IDs must be task-01, task-02, ... and dependencies must reference prior IDs.
 
 USER REQUEST:
@@ -149,16 +155,6 @@ AVAILABLE SPECIALISTS AND TOOLS:
 REQUESTED OUTPUT: {output}
 """
         plan = planner.invoke(message)
-        if not any(task.specialist == "export" for task in plan.tasks):
-            plan.tasks.append(
-                AgentTask(
-                    id=f"task-{len(plan.tasks) + 1:02d}",
-                    specialist="export",
-                    goal=f"Export the finished edit as {output}",
-                    preferred_tools=["export"],
-                    depends_on=[plan.tasks[-1].id] if plan.tasks else [],
-                )
-            )
         return plan
 
     def specialist(
@@ -168,6 +164,7 @@ REQUESTED OUTPUT: {output}
         understanding: VideoUnderstanding,
         creative_direction: str,
         output: str,
+        dependency_outputs: list[SpecialistCode] | None = None,
     ) -> SpecialistCode:
         allowed = ALLOWED_TOOLS[task.specialist]
         coder = self.model.with_structured_output(SpecialistCode)
@@ -182,6 +179,10 @@ The generated statements are AST-validated and executed in a resource-limited su
 ORIGINAL USER REQUEST: {prompt}
 CREATIVE DIRECTION: {creative_direction}
 ASSIGNED TASK: {task.model_dump_json(indent=2)}
+COMPLETED DEPENDENCY OUTPUTS:
+{json.dumps([item.model_dump() for item in dependency_outputs or []], indent=2)}
+Use these predecessors' decisions and code to choose compatible timing and parameters.
+Do not repeat their operations. They have generated code, not rendered intermediate videos.
 SCENE ANALYSIS: {understanding.model_dump_json(indent=2)}
 ALLOWED METHODS: {allowed}
 METHOD SIGNATURES:
@@ -236,4 +237,5 @@ editor.fade(kind='in|out|both', duration=<seconds>)
         "export": f"editor.export(filename='{output}', width=<optional int>, height=<optional int>, crf=<18..30>)",
     }
     return docs[specialist]
+
 

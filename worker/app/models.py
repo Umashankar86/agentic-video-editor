@@ -1,6 +1,6 @@
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 OperationType = Literal["trim", "cut", "merge", "subtitles", "transition", "export"]
@@ -67,7 +67,25 @@ class AgentTask(BaseModel):
 class AgentPlan(BaseModel):
     summary: str
     creative_direction: str
-    tasks: list[AgentTask] = Field(min_length=1)
+    tasks: list[AgentTask] = Field(min_length=1, max_length=99)
+
+    @model_validator(mode="after")
+    def validate_dependencies(self):
+        seen: set[str] = set()
+        exports = [task for task in self.tasks if task.specialist == "export"]
+        if len(exports) != 1 or self.tasks[-1].specialist != "export":
+            raise ValueError("Plan must finish with exactly one export task")
+        for task in self.tasks:
+            if task.id in seen:
+                raise ValueError(f"Duplicate task ID: {task.id}")
+            if len(task.depends_on) != len(set(task.depends_on)):
+                raise ValueError(f"Duplicate dependencies for {task.id}")
+            if not set(task.depends_on) <= seen:
+                raise ValueError(f"Dependencies for {task.id} must reference prior task IDs")
+            seen.add(task.id)
+        # Export is a final join even when the model omits some dependencies.
+        self.tasks[-1].depends_on = [task.id for task in self.tasks[:-1]]
+        return self
 
 
 class SpecialistCode(BaseModel):
@@ -118,4 +136,5 @@ def _validate_artifacts(values: list[str]) -> list[str]:
         if not normalized.startswith(("uploads/", "work/")):
             raise ValueError("input artifacts must come from uploads/ or work/")
     return values
+
 
