@@ -16,7 +16,7 @@ from .models import SpecialistCode
 ALLOWED_METHODS = {
     "merge", "trim", "cut", "transition", "crop", "speed", "color_grade",
     "add_music", "select_music", "transcribe_subtitles", "add_subtitles",
-    "add_text", "zoom", "fade", "export",
+    "add_text", "zoom", "fade", "export", "mcp_effect",
 }
 
 
