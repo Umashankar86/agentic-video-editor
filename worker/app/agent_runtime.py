@@ -28,6 +28,26 @@ class VideoEditor:
     def set_task(self, task_id: str) -> None:
         self.task_id = task_id
 
+    def mcp_effect(self, *, name: str, options: dict[str, Any] | None = None) -> None:
+        """Run an explicitly selected ffmpeg-skill tool on the current video.
+
+        This preserves the native methods. An MCP failure never silently reruns a
+        potentially destructive operation. Use native methods explicitly instead.
+        """
+        from .mcp_client import execute_mcp_tool
+        if not settings.ffmpeg_skill_mcp_server:
+            raise MediaError("FFMPEG_SKILL_MCP_SERVER is not configured")
+        if name not in {"cut", "fit", "silence", "loudness", "fade", "speed", "color", "crop", "overlay", "caption", "export"}:
+            raise MediaError(f"unsupported editing MCP tool: {name}")
+        self._apply(
+            "mcp_" + name,
+            lambda out: execute_mcp_tool(
+                name, options or {}, self._input(), out,
+                server_path=settings.ffmpeg_skill_mcp_server,
+                timeout=settings.ffmpeg_skill_timeout_seconds,
+            ),
+        )
+
     def merge(self) -> None:
         self._apply("merge", lambda out: self.media._merge(self.originals, out, {}))
 
