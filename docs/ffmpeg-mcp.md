@@ -1,42 +1,63 @@
-## Optional ffmpeg-skill MCP backend
+# ffmpeg-skill MCP in the Agentic Video Editor
 
-This branch adds a shared Python MCP client in `worker/app/mcp_client.py` and
-an optional `editor.mcp_effect(...)` capability available to all five specialist
-agents. **Native editing is still available and is the default**. LangGraph
-dependencies, agent count, rendering order and AST validation are unchanged.
+The ffmpeg-skill server runs **inside this project**, under `vendor/ffmpeg-skill/mcp/server.py`.
+It uses stdio, so no separate HTTP server or port is needed.
 
-1. Install FFmpeg and clone [kajisho5/ffmpeg-skill](https://github.com/kajisho5/ffmpeg-skill)
-   to a location accessible to the **worker process**.
-2. Install Python dependencies: `pip install -r worker/requirements.txt`.
-3. Configure the absolute path to that checkout's `mcp/server.py`:
-   `FFMPEG_SKILL_MCP_SERVER=/absolute/path/ffmpeg-skill/mcp/server.py`.
-   Optionally set `FFMPEG_SKILL_PYTHON` to the Python executable and
-   `FFMPEG_SKILL_TIMEOUT_SECONDS=600`.
-4. On Docker, mount the checkout into the worker container, e.g. add
-   `- /your/host/ffmpeg-skill:/opt/ffmpeg-skill:ro` under worker volumes and
-   use `FFMPEG_SKILL_MCP_SERVER=/opt/ffmpeg-skill/mcp/server.py`.
-   A Windows-host path inside a Linux container will not work.
-5. Run `python -m pytest worker/tests/test_mcp_client.py -q` and then test
-   a representative short input clip with an MCP-capable operation.
+## Docker (recommended)
 
-Specialists can choose native methods such as `editor.trim(start=2, end=5)`
-or invoke a restricted MCP transformation:
+```bash
+docker compose up --build
+```
+
+The worker Dockerfile clones a pinned ffmpeg-skill revision into
+`/app/vendor/ffmpeg-skill` and configures
+`FFMPEG_SKILL_MCP_SERVER=/app/vendor/ffmpeg-skill/mcp/server.py`.
+No separate checkout or volume mount is needed. Docker image builds require
+access to GitHub to download the dependency.
+
+## Native Windows/Linux
+
+From the project root:
+
+```bash
+python scripts/install_ffmpeg_skill.py
+python -m pip install -r worker/requirements.txt
+```
+
+The installer clones the same pinned revision into `vendor/ffmpeg-skill`.
+Set `FFMPEG_SKILL_MCP_SERVER` to that path (already the default setting),
+ensure ffmpeg/ffprobe and Python are installed, then start the worker as usual.
+`vendor/` is ignored by Git to avoid copying the whole third-party project
+into this repository.
+
+## Architecture
+
+The supervisor and five specialist agents are unchanged. Specialists may
+generate either native operations or `editor.mcp_effect(...)` calls:
 
 ```python
 editor.mcp_effect(name="fit", options={"aspect": "9:16", "fit": "crop"})
 ```
 
-The wrapper supplies the current video as input and the next numbered
-intermediate video as output. Input/output path overrides, raw `argv`,
-shell commands, and arbitrary MCP tool names are rejected. Each successful
-step is recorded as an `mcp_<name>` event. MCP failure fails the job rather
-than silently running a different edit.
+The trusted adapter sets the input/output paths and connects to the local
+ffmpeg-skill MCP server via stdio. It restricts supported transforming
+tools to: `cut`, `fit`, `silence`, `loudness`, `caption`, and `export`.
+The original native tools remain available. All edits still execute
+sequentially on a shared timeline, while independent specialist **plans**
+can be created concurrently.
 
-**Limitations:** This is an initial experimental integration. The MCP server
-must be installed separately; ffmpeg-skill tools accept different argument
-schemas and not every option or operation is supported by this adapter.
-The integration has not been exercised end-to-end against real media here.
-Review the actual ffmpeg-skill tool contract before enabling more operations.
-The subprocess sandbox is not a hardened untrusted-code or filesystem boundary:
-run it in an isolated container and do not expose arbitrary filesystem paths
-to untrusted callers.
+## Testing
+
+```bash
+python -m pytest worker/tests/test_mcp_client.py -q
+python -m pytest worker/tests -q
+```
+
+Then test a real short clip with `editor.mcp_effect(name="fit", ...)`.
+MCP errors fail closed rather than silently substituting a native operation.
+
+**Current limitation:** This integration has not been verified with a real-media
+end-to-end run in this environment. Only a subset of ffmpeg-skill's tool
+contracts is supported. Input/output names are controlled by the adapter;
+arbitrary tool arguments or external file paths must not be accepted.
+Treat the child-process limits as defense-in-depth, not a hardened sandbox.
