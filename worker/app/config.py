@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     frame_sample_seconds: int = 30
     whisper_model: str = "small"
     sandbox_timeout_seconds: int = 1800
-    ffmpeg_skill_mcp_server: str = ""
+    ffmpeg_skill_mcp_server: str = "vendor/ffmpeg-skill/mcp/server.py"
     ffmpeg_skill_timeout_seconds: int = 600
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
