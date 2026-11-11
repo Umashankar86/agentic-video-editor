@@ -37,7 +37,7 @@ class VideoEditor:
         from .mcp_client import execute_mcp_tool
         if not settings.ffmpeg_skill_mcp_server:
             raise MediaError("FFMPEG_SKILL_MCP_SERVER is not configured")
-        if name not in {"cut", "fit", "silence", "loudness", "fade", "speed", "color", "crop", "overlay", "caption", "export"}:
+        if name not in {"cut", "fit", "silence", "loudness", "caption", "export"}:
             raise MediaError(f"unsupported editing MCP tool: {name}")
         self._apply(
             "mcp_" + name,
