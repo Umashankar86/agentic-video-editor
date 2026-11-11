@@ -14,14 +14,12 @@ from pathlib import Path
 from typing import Any
 
 ALLOWED_MCP_TOOLS = frozenset({
-    "cut", "fit", "caption", "audio", "loudness", "graphics",
-    "silence", "export", "fade", "speed", "color", "crop",
-    "join", "overlay", "transition", "trim", "subtitles",
+    "cut", "fit", "caption", "loudness", "silence", "export",
 })
 FORBIDDEN_ARGUMENTS = frozenset({
     "argv", "input", "inputs", "output", "source", "destination",
     "infile", "outfile", "input_file", "output_file", "file",
-    "path", "command", "shell", "script",
+    "path", "command", "shell", "script", "plan", "overwrite", "dry_run", "template", "project",
 })
 
 
@@ -81,7 +79,7 @@ async def _invoke(name: str, options: dict[str, Any], source: Path, target: Path
             if not required.issubset(arguments):
                 raise MCPToolError(f"MCP tool needs additional arguments: {sorted(required - arguments.keys())}")
             unknown = arguments.keys() - properties.keys()
-            if unknown and properties.get("additionalProperties") is not True:
+            if unknown and schema.get("additionalProperties") is not True:
                 raise MCPToolError(f"unknown MCP arguments: {sorted(unknown)}")
             result = await session.call_tool(name, arguments)
             if result.isError:
