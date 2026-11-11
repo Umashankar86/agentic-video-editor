@@ -166,9 +166,9 @@ REQUESTED OUTPUT: {output}
         output: str,
         dependency_outputs: list[SpecialistCode] | None = None,
     ) -> SpecialistCode:
-        allowed = ALLOWED_TOOLS[task.specialist]
+        allowed = [*ALLOWED_TOOLS[task.specialist], "mcp_effect"]
         coder = self.model.with_structured_output(SpecialistCode)
-        tool_docs = _tool_documentation(task.specialist, output)
+        tool_docs = _tool_documentation(task.specialist, output) + "\nOPTIONAL MCP TOOL (all specialists):\neditor.mcp_effect(name='<ffmpeg-skill tool>', options={<literal option names and values>})\nMCP requires FFMPEG_SKILL_MCP_SERVER to be set. Prefer native methods for ordinary edits. MCP tool names: cut, fit, silence, loudness, fade, speed, color, crop, overlay, caption, export. Do not supply input/output paths: the runtime sets these.\n"
         message = f"""
 You are the {task.specialist} specialist in a video-editing agent team.
 Translate your assigned goal into short Python statements. Return only calls in the form
